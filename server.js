@@ -293,7 +293,7 @@ function renderStudentPage() {
       <p class="lede">Submit your rating for the presentation currently in progress.</p>
 
       <div class="notice" role="note">
-        Fraudulent evaluation activity or duplicate voting may result in penalties. If multiple evaluations are submitted from the same IP address for the same presentation, only the first evaluation will be recorded.
+        Fraudulent evaluation activity or duplicate voting may result in penalties. If multiple evaluations are submitted with the same student ID for the same presentation, only the first evaluation will be recorded.
       </div>
 
       <form id="evaluation-form" class="stack">
@@ -1097,7 +1097,7 @@ async function handleApi(req, res, url) {
     const ipHash = hashIp(getClientIp(req));
     const stored = readResponses();
     const existing = (stored.responses || []).find((response) => {
-      return response.presentationId === match.presentation.id && response.ipHash === ipHash;
+      return response.presentationId === match.presentation.id && response.studentId === studentId;
     });
 
     if (existing) {
