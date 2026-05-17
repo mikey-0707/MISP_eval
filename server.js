@@ -300,6 +300,9 @@ function renderStudentPage() {
         <label for="student-id">Student ID</label>
         <input id="student-id" name="studentId" inputmode="numeric" autocomplete="off" pattern="[0-9]{4,20}" maxlength="20" placeholder="Student ID" required>
 
+        <label for="student-name">Name</label>
+        <input id="student-name" name="studentName" autocomplete="name" maxlength="80" placeholder="Name" required>
+
         <label for="code">Presentation code</label>
         <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="Six-digit code" required>
 
@@ -352,6 +355,7 @@ function renderStudentPage() {
 
       const payload = {
         studentId: document.getElementById("student-id").value.trim(),
+        studentName: document.getElementById("student-name").value.trim(),
         code: document.getElementById("code").value.trim(),
         rating: document.querySelector('input[name="rating"]:checked')?.value
       };
@@ -471,6 +475,7 @@ function renderAdminPage() {
               <th>Week</th>
               <th>Group</th>
               <th>Student ID</th>
+              <th>Name</th>
               <th>Topic</th>
               <th>Rating</th>
               <th>IP Hash</th>
@@ -590,7 +595,7 @@ function renderAdminPage() {
       responsesBody.innerHTML = "";
       const rows = [...snapshot.responses].reverse();
       if (!rows.length) {
-        responsesBody.innerHTML = '<tr><td colspan="7">No responses recorded yet.</td></tr>';
+        responsesBody.innerHTML = '<tr><td colspan="8">No responses recorded yet.</td></tr>';
         return;
       }
       rows.forEach((response) => {
@@ -600,6 +605,7 @@ function renderAdminPage() {
           '<td>' + response.week + '</td>' +
           '<td>' + response.group + '</td>' +
           '<td>' + html(response.studentId) + '</td>' +
+          '<td>' + html(response.studentName) + '</td>' +
           '<td>' + response.topic + '</td>' +
           '<td><strong>' + response.rating + '</strong></td>' +
           '<td><code>' + response.ipHash + '</code></td>';
@@ -974,7 +980,7 @@ function excelRow(values, styleId = "") {
 
 function renderCsv() {
   const rows = readResponses().responses || [];
-  const header = ["submittedAt", "week", "date", "group", "studentId", "topic", "rating", "ipHash"];
+  const header = ["submittedAt", "week", "date", "group", "studentId", "studentName", "topic", "rating", "ipHash"];
   const body = rows.map((row) => header.map((key) => csvEscape(row[key])).join(","));
   return [header.join(","), ...body].join("\n");
 }
@@ -990,7 +996,7 @@ function renderPresentationExcel(presentationId) {
   const rows = (readResponses().responses || []).filter((response) => response.presentationId === presentationId);
   const filename = `week-${presentation.week}-group-${presentation.group}-responses.xls`;
   const worksheetName = `W${presentation.week} G${presentation.group}`;
-  const header = ["Submitted At", "Week", "Date", "Chapter", "Group", "Topic", "Student ID", "Rating", "IP Hash"];
+  const header = ["Submitted At", "Week", "Date", "Chapter", "Group", "Topic", "Student ID", "Name", "Rating", "IP Hash"];
   const dataRows = rows.map((response) => [
     response.submittedAt,
     response.week,
@@ -999,6 +1005,7 @@ function renderPresentationExcel(presentationId) {
     response.group,
     response.topic,
     response.studentId || "",
+    response.studentName || "",
     response.rating,
     response.ipHash
   ]);
@@ -1040,6 +1047,7 @@ function renderPresentationExcel(presentationId) {
       <Column ss:Width="70" />
       <Column ss:Width="230" />
       <Column ss:Width="110" />
+      <Column ss:Width="140" />
       <Column ss:Width="60" />
       <Column ss:Width="140" />
       ${tableRows}
@@ -1087,6 +1095,12 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    const studentName = String(body.studentName || "").trim().replace(/\s+/g, " ");
+    if (studentName.length < 1 || studentName.length > 80) {
+      sendJson(res, 400, { error: "Please enter a valid name." });
+      return;
+    }
+
     const state = readState();
     const match = findPresentationByCode(body.code, state);
     if (!match) {
@@ -1114,6 +1128,7 @@ async function handleApi(req, res, url) {
       topic: match.presentation.topic,
       group: match.presentation.group,
       studentId,
+      studentName,
       rating,
       ipHash,
       submittedAt: getKstDateParts().isoLike
