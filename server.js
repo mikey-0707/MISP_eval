@@ -77,12 +77,13 @@ function saveResponses(responses) {
   writeJson(RESPONSES_PATH, responses);
 }
 
-function send(res, statusCode, body, contentType = "text/html; charset=utf-8") {
+function send(res, statusCode, body, contentType = "text/html; charset=utf-8", extraHeaders = {}) {
   const payload = Buffer.from(body);
   res.writeHead(statusCode, {
     "Content-Type": contentType,
     "Content-Length": payload.length,
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    ...extraHeaders
   });
   res.end(payload);
 }
@@ -560,7 +561,7 @@ function renderAdminPage() {
             '<td>' + badge(session.active) + '</td>' +
             '<td><strong class="code-display">' + text(session.code) + '</strong></td>' +
             '<td>' + text(summary.count || 0) + '</td>' +
-            '<td><button class="small-button" data-start="' + presentation.id + '">Start</button> <button class="small-button quiet" data-stop="' + presentation.id + '">Stop</button> <button class="small-button danger" data-reset-votes="' + presentation.id + '">Reset Votes</button></td>';
+            '<td><button class="small-button" data-start="' + presentation.id + '">Start</button> <button class="small-button quiet" data-stop="' + presentation.id + '">Stop</button> <a class="small-button export" href="/admin/export.xls?presentationId=' + encodeURIComponent(presentation.id) + '&key=' + encodeURIComponent(key) + '">Excel</a> <button class="small-button danger" data-reset-votes="' + presentation.id + '">Reset Votes</button></td>';
           scheduleBody.appendChild(row);
         }
       }
@@ -788,7 +789,7 @@ function baseStyles() {
       background: var(--primary);
       color: #fff;
     }
-    button, .secondary-button {
+    button, .secondary-button, .small-button {
       border: 0;
       border-radius: 6px;
       background: var(--primary);
@@ -903,6 +904,12 @@ function baseStyles() {
       padding: 0.4rem 0.7rem;
       font-size: 0.86rem;
     }
+    .small-button.export {
+      background: #2f4052;
+    }
+    .small-button.export:hover {
+      background: #22303d;
+    }
     .small-button.quiet {
       background: #6b7280;
     }
@@ -947,11 +954,100 @@ function csvEscape(value) {
   return text;
 }
 
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function excelCell(value, styleId = "") {
+  const style = styleId ? ` ss:StyleID="${styleId}"` : "";
+  return `<Cell${style}><Data ss:Type="String">${xmlEscape(value)}</Data></Cell>`;
+}
+
+function excelRow(values, styleId = "") {
+  return `<Row>${values.map((value) => excelCell(value, styleId)).join("")}</Row>`;
+}
+
 function renderCsv() {
   const rows = readResponses().responses || [];
   const header = ["submittedAt", "week", "date", "group", "studentId", "topic", "rating", "ipHash"];
   const body = rows.map((row) => header.map((key) => csvEscape(row[key])).join(","));
   return [header.join(","), ...body].join("\n");
+}
+
+function renderPresentationExcel(presentationId) {
+  const presentation = presentationMap().get(presentationId);
+  if (!presentation) {
+    return null;
+  }
+
+  const state = readState();
+  const session = (state.sessions || {})[presentationId] || {};
+  const rows = (readResponses().responses || []).filter((response) => response.presentationId === presentationId);
+  const filename = `week-${presentation.week}-group-${presentation.group}-responses.xls`;
+  const worksheetName = `W${presentation.week} G${presentation.group}`;
+  const header = ["Submitted At", "Week", "Date", "Chapter", "Group", "Topic", "Student ID", "Rating", "IP Hash"];
+  const dataRows = rows.map((response) => [
+    response.submittedAt,
+    response.week,
+    response.date,
+    response.chapter,
+    response.group,
+    response.topic,
+    response.studentId || "",
+    response.rating,
+    response.ipHash
+  ]);
+
+  const tableRows = [
+    excelRow(["Presentation Evaluation Responses"], "Title"),
+    excelRow(["Week", presentation.week]),
+    excelRow(["Date", presentation.date]),
+    excelRow(["Chapter", presentation.chapter]),
+    excelRow(["Group", presentation.group]),
+    excelRow(["Topic", presentation.topic]),
+    excelRow(["Session Code", session.code || ""]),
+    excelRow(["Session Status", session.active ? "Open" : "Closed"]),
+    excelRow(["Started At", session.startedAt || ""]),
+    excelRow(["Stopped At", session.stoppedAt || ""]),
+    excelRow(["Response Count", rows.length]),
+    "<Row />",
+    excelRow(header, "Header"),
+    ...dataRows.map((row) => excelRow(row))
+  ].join("");
+
+  const body = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Title"><Font ss:Bold="1" ss:Size="14" /></Style>
+    <Style ss:ID="Header"><Font ss:Bold="1" /><Interior ss:Color="#EEF2F5" ss:Pattern="Solid" /></Style>
+  </Styles>
+  <Worksheet ss:Name="${xmlEscape(worksheetName)}">
+    <Table>
+      <Column ss:Width="150" />
+      <Column ss:Width="70" />
+      <Column ss:Width="90" />
+      <Column ss:Width="210" />
+      <Column ss:Width="70" />
+      <Column ss:Width="230" />
+      <Column ss:Width="110" />
+      <Column ss:Width="60" />
+      <Column ss:Width="140" />
+      ${tableRows}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+
+  return { filename, body };
 }
 
 async function handleApi(req, res, url) {
@@ -1144,6 +1240,24 @@ const server = http.createServer((req, res) => {
       return;
     }
     send(res, 200, renderCsv(), "text/csv; charset=utf-8");
+    return;
+  }
+
+  if (url.pathname === "/admin/export.xls") {
+    if (!isAdminRequest(url)) {
+      send(res, 403, "Invalid admin key.", "text/plain; charset=utf-8");
+      return;
+    }
+
+    const exportFile = renderPresentationExcel(url.searchParams.get("presentationId") || "");
+    if (!exportFile) {
+      send(res, 404, "Presentation not found.", "text/plain; charset=utf-8");
+      return;
+    }
+
+    send(res, 200, exportFile.body, "application/vnd.ms-excel; charset=utf-8", {
+      "Content-Disposition": `attachment; filename="${exportFile.filename}"`
+    });
     return;
   }
 

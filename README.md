@@ -30,6 +30,7 @@ I am willing to purchase this product.
 Only the first response from the same IP address is recorded for each presentation.
 
 Use `Reset Votes` in the admin table to clear recorded votes for a single presentation while keeping the presentation session controls available.
+Use each row's `Excel` link to download the full response data for that presentation session.
 
 ## Scheduled Operation
 
