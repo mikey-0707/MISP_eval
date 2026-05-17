@@ -32,6 +32,25 @@ Only the first response from the same student ID is recorded for each presentati
 Use `Reset Votes` in the admin table to clear recorded votes for a single presentation while keeping the presentation session controls available.
 Use each row's `Excel` link to download the full response data for that presentation session.
 
+## Data Durability
+
+Responses and session state are written to `APP_DATA_DIR` when that environment variable is set, otherwise to `data/`.
+
+Durability protections:
+
+- Every accepted response is saved to `responses.json`.
+- `responses-latest.json` and daily response snapshots are written under `backups/`.
+- Session state is also backed up under `backups/`.
+- Accepted responses, duplicate attempts, session starts/stops, and vote resets are appended to `events.ndjson`.
+- `Reset Votes` archives removed responses in `archived-responses.json` instead of permanently deleting them.
+- The admin page provides `Archive CSV` and `Event Log` downloads for recovery/audit.
+
+For cloud deployment, use persistent storage and set:
+
+```text
+APP_DATA_DIR=/var/data
+```
+
 ## Scheduled Operation
 
 Register Windows Scheduled Tasks for the presentation dates:

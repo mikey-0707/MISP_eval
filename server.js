@@ -9,6 +9,9 @@ const SCHEDULE_PATH = path.join(ROOT, "data", "schedule.json");
 const DATA_DIR = process.env.APP_DATA_DIR ? path.resolve(process.env.APP_DATA_DIR) : path.join(ROOT, "data");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
 const RESPONSES_PATH = path.join(DATA_DIR, "responses.json");
+const ARCHIVE_PATH = path.join(DATA_DIR, "archived-responses.json");
+const EVENTS_PATH = path.join(DATA_DIR, "events.ndjson");
+const BACKUP_DIR = path.join(DATA_DIR, "backups");
 const ADMIN_KEY_PATH = path.join(DATA_DIR, "admin-key.txt");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -20,6 +23,7 @@ const CLASS_END = "13:30";
 const PURCHASE_STATEMENT = "I am willing to purchase this product.";
 
 ensureDir(DATA_DIR);
+ensureDir(BACKUP_DIR);
 
 const schedule = readJson(SCHEDULE_PATH, []);
 const adminKey = loadAdminKey();
@@ -62,19 +66,91 @@ function readState() {
   return readJson(STATE_PATH, { sessions: {} });
 }
 
-function saveState(state) {
+function saveState(state, reason = "save") {
   if (!state.sessions) {
     state.sessions = {};
   }
   writeJson(STATE_PATH, state);
+  try {
+    backupState(state, reason);
+  } catch (error) {
+    console.error("State backup failed:", error);
+  }
 }
 
 function readResponses() {
   return readJson(RESPONSES_PATH, { responses: [] });
 }
 
-function saveResponses(responses) {
+function saveResponses(responses, reason = "save") {
   writeJson(RESPONSES_PATH, responses);
+  try {
+    backupResponses(responses, reason);
+  } catch (error) {
+    console.error("Response backup failed:", error);
+  }
+}
+
+function readArchivedResponses() {
+  return readJson(ARCHIVE_PATH, { archivedResponses: [] });
+}
+
+function saveArchivedResponses(archive) {
+  writeJson(ARCHIVE_PATH, archive);
+}
+
+function backupResponses(responses, reason) {
+  const now = getKstDateParts();
+  const snapshot = {
+    backedUpAt: now.isoLike,
+    backupReason: reason,
+    responses: responses.responses || []
+  };
+  writeJson(path.join(BACKUP_DIR, "responses-latest.json"), snapshot);
+  writeJson(path.join(BACKUP_DIR, `responses-${now.date}.json`), snapshot);
+}
+
+function backupState(state, reason) {
+  const now = getKstDateParts();
+  const snapshot = {
+    backedUpAt: now.isoLike,
+    backupReason: reason,
+    sessions: state.sessions || {}
+  };
+  writeJson(path.join(BACKUP_DIR, "state-latest.json"), snapshot);
+  writeJson(path.join(BACKUP_DIR, `state-${now.date}.json`), snapshot);
+}
+
+function appendEvent(type, payload) {
+  const event = {
+    eventId: crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString("hex"),
+    type,
+    occurredAt: getKstDateParts().isoLike,
+    ...payload
+  };
+  try {
+    fs.appendFileSync(EVENTS_PATH, `${JSON.stringify(event)}\n`, "utf8");
+  } catch (error) {
+    console.error("Event log append failed:", error);
+  }
+}
+
+function archiveResponses(responses, metadata) {
+  if (!responses.length) {
+    return;
+  }
+
+  const archive = readArchivedResponses();
+  const archivedAt = getKstDateParts().isoLike;
+  archive.archivedResponses = archive.archivedResponses || [];
+  for (const response of responses) {
+    archive.archivedResponses.push({
+      archivedAt,
+      ...metadata,
+      response
+    });
+  }
+  saveArchivedResponses(archive);
 }
 
 function send(res, statusCode, body, contentType = "text/html; charset=utf-8", extraHeaders = {}) {
@@ -405,6 +481,8 @@ function renderAdminPage() {
       </div>
       <div class="admin-actions">
         <a id="export-link" class="secondary-button" href="#">Export CSV</a>
+        <a id="archive-link" class="secondary-button" href="#">Archive CSV</a>
+        <a id="events-link" class="secondary-button" href="#">Event Log</a>
         <button id="refresh-button" type="button" class="secondary-button">Refresh</button>
       </div>
     </header>
@@ -493,6 +571,8 @@ function renderAdminPage() {
     const responsesBody = document.getElementById("responses-body");
     const refreshButton = document.getElementById("refresh-button");
     const exportLink = document.getElementById("export-link");
+    const archiveLink = document.getElementById("archive-link");
+    const eventsLink = document.getElementById("events-link");
 
     function text(value) {
       return value === undefined || value === null || value === "" ? "—" : String(value);
@@ -623,6 +703,8 @@ function renderAdminPage() {
       document.getElementById("now").textContent = snapshot.now;
       document.getElementById("admin-url").textContent = snapshot.adminUrl;
       exportLink.href = "/admin/export.csv?key=" + encodeURIComponent(key);
+      archiveLink.href = "/admin/archive.csv?key=" + encodeURIComponent(key);
+      eventsLink.href = "/admin/events.ndjson?key=" + encodeURIComponent(key);
       renderSchedule(snapshot);
       renderSummary(snapshot);
       renderResponses(snapshot);
@@ -985,6 +1067,43 @@ function renderCsv() {
   return [header.join(","), ...body].join("\n");
 }
 
+function renderArchiveCsv() {
+  const rows = readArchivedResponses().archivedResponses || [];
+  const header = [
+    "archivedAt",
+    "archiveReason",
+    "presentationId",
+    "submittedAt",
+    "week",
+    "date",
+    "group",
+    "studentId",
+    "studentName",
+    "topic",
+    "rating",
+    "ipHash"
+  ];
+  const body = rows.map((entry) => {
+    const response = entry.response || {};
+    const row = {
+      archivedAt: entry.archivedAt,
+      archiveReason: entry.reason,
+      presentationId: entry.presentationId || response.presentationId,
+      submittedAt: response.submittedAt,
+      week: response.week,
+      date: response.date,
+      group: response.group,
+      studentId: response.studentId,
+      studentName: response.studentName,
+      topic: response.topic,
+      rating: response.rating,
+      ipHash: response.ipHash
+    };
+    return header.map((key) => csvEscape(row[key])).join(",");
+  });
+  return [header.join(","), ...body].join("\n");
+}
+
 function renderPresentationExcel(presentationId) {
   const presentation = presentationMap().get(presentationId);
   if (!presentation) {
@@ -1115,6 +1234,13 @@ async function handleApi(req, res, url) {
     });
 
     if (existing) {
+      appendEvent("duplicate_response_ignored", {
+        presentationId: match.presentation.id,
+        studentId,
+        studentName,
+        ipHash,
+        existingResponseId: existing.id
+      });
       sendJson(res, 200, { ok: true, duplicate: true });
       return;
     }
@@ -1136,7 +1262,8 @@ async function handleApi(req, res, url) {
 
     stored.responses = stored.responses || [];
     stored.responses.push(response);
-    saveResponses(stored);
+    saveResponses(stored, "response-submitted");
+    appendEvent("response_submitted", { response });
     sendJson(res, 201, { ok: true });
     return;
   }
@@ -1178,7 +1305,11 @@ async function handleApi(req, res, url) {
       startedAt: getKstDateParts().isoLike,
       stoppedAt: null
     };
-    saveState(state);
+    saveState(state, "session-started");
+    appendEvent("session_started", {
+      presentationId,
+      session: state.sessions[presentationId]
+    });
     sendJson(res, 200, { ok: true, session: state.sessions[presentationId] });
     return;
   }
@@ -1201,7 +1332,11 @@ async function handleApi(req, res, url) {
     if (state.sessions && state.sessions[presentationId]) {
       state.sessions[presentationId].active = false;
       state.sessions[presentationId].stoppedAt = getKstDateParts().isoLike;
-      saveState(state);
+      saveState(state, "session-stopped");
+      appendEvent("session_stopped", {
+        presentationId,
+        session: state.sessions[presentationId]
+      });
     }
     sendJson(res, 200, { ok: true });
     return;
@@ -1228,10 +1363,20 @@ async function handleApi(req, res, url) {
     }
 
     const stored = readResponses();
-    const beforeCount = (stored.responses || []).length;
-    stored.responses = (stored.responses || []).filter((response) => response.presentationId !== presentationId);
-    saveResponses(stored);
-    sendJson(res, 200, { ok: true, removed: beforeCount - stored.responses.length });
+    const currentResponses = stored.responses || [];
+    const removedResponses = currentResponses.filter((response) => response.presentationId === presentationId);
+    stored.responses = currentResponses.filter((response) => response.presentationId !== presentationId);
+    archiveResponses(removedResponses, {
+      reason: "reset-votes",
+      presentationId
+    });
+    saveResponses(stored, "reset-votes");
+    appendEvent("votes_reset", {
+      presentationId,
+      removed: removedResponses.length,
+      archived: removedResponses
+    });
+    sendJson(res, 200, { ok: true, removed: removedResponses.length });
     return;
   }
 
@@ -1255,6 +1400,29 @@ const server = http.createServer((req, res) => {
       return;
     }
     send(res, 200, renderCsv(), "text/csv; charset=utf-8");
+    return;
+  }
+
+  if (url.pathname === "/admin/archive.csv") {
+    if (!isAdminRequest(url)) {
+      send(res, 403, "Invalid admin key.", "text/plain; charset=utf-8");
+      return;
+    }
+    send(res, 200, renderArchiveCsv(), "text/csv; charset=utf-8", {
+      "Content-Disposition": 'attachment; filename="archived-responses.csv"'
+    });
+    return;
+  }
+
+  if (url.pathname === "/admin/events.ndjson") {
+    if (!isAdminRequest(url)) {
+      send(res, 403, "Invalid admin key.", "text/plain; charset=utf-8");
+      return;
+    }
+    const events = fs.existsSync(EVENTS_PATH) ? fs.readFileSync(EVENTS_PATH, "utf8") : "";
+    send(res, 200, events, "application/x-ndjson; charset=utf-8", {
+      "Content-Disposition": 'attachment; filename="audit-events.ndjson"'
+    });
     return;
   }
 

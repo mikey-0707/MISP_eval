@@ -1,5 +1,7 @@
 data/admin-key.txt
 data/*.json
 !data/schedule.json
+data/*.ndjson
+data/backups/
 logs/
 *.pid
