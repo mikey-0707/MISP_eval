@@ -296,18 +296,42 @@ function renderStudentPage() {
       </div>
 
       <form id="evaluation-form" class="stack">
+        <label for="student-id">Student ID</label>
+        <input id="student-id" name="studentId" inputmode="numeric" autocomplete="off" pattern="[0-9]{4,20}" maxlength="20" placeholder="Student ID" required>
+
         <label for="code">Presentation code</label>
         <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="Six-digit code" required>
 
-        <label for="rating">${escapeHtml(PURCHASE_STATEMENT)}</label>
-        <select id="rating" name="rating" required>
-          <option value="">Select a rating</option>
-          <option value="1">1 - Strongly disagree</option>
-          <option value="2">2 - Disagree</option>
-          <option value="3">3 - Neutral</option>
-          <option value="4">4 - Agree</option>
-          <option value="5">5 - Strongly agree</option>
-        </select>
+        <fieldset class="rating-field">
+          <legend>${escapeHtml(PURCHASE_STATEMENT)}</legend>
+          <div class="rating-scale">
+            <label class="rating-option">
+              <input type="radio" name="rating" value="1" required>
+              <span>1</span>
+              <small>Strongly disagree</small>
+            </label>
+            <label class="rating-option">
+              <input type="radio" name="rating" value="2">
+              <span>2</span>
+              <small>Disagree</small>
+            </label>
+            <label class="rating-option">
+              <input type="radio" name="rating" value="3">
+              <span>3</span>
+              <small>Neutral</small>
+            </label>
+            <label class="rating-option">
+              <input type="radio" name="rating" value="4">
+              <span>4</span>
+              <small>Agree</small>
+            </label>
+            <label class="rating-option">
+              <input type="radio" name="rating" value="5">
+              <span>5</span>
+              <small>Strongly agree</small>
+            </label>
+          </div>
+        </fieldset>
 
         <button type="submit" id="submit-button">Submit Evaluation</button>
       </form>
@@ -326,8 +350,9 @@ function renderStudentPage() {
       message.textContent = "Submitting...";
 
       const payload = {
+        studentId: document.getElementById("student-id").value.trim(),
         code: document.getElementById("code").value.trim(),
-        rating: document.getElementById("rating").value
+        rating: document.querySelector('input[name="rating"]:checked')?.value
       };
 
       try {
@@ -444,6 +469,7 @@ function renderAdminPage() {
               <th>Submitted</th>
               <th>Week</th>
               <th>Group</th>
+              <th>Student ID</th>
               <th>Topic</th>
               <th>Rating</th>
               <th>IP Hash</th>
@@ -468,6 +494,15 @@ function renderAdminPage() {
 
     function badge(active) {
       return active ? '<span class="badge active">Open</span>' : '<span class="badge">Closed</span>';
+    }
+
+    function html(value) {
+      return text(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     async function adminPost(path, payload) {
@@ -554,7 +589,7 @@ function renderAdminPage() {
       responsesBody.innerHTML = "";
       const rows = [...snapshot.responses].reverse();
       if (!rows.length) {
-        responsesBody.innerHTML = '<tr><td colspan="6">No responses recorded yet.</td></tr>';
+        responsesBody.innerHTML = '<tr><td colspan="7">No responses recorded yet.</td></tr>';
         return;
       }
       rows.forEach((response) => {
@@ -563,6 +598,7 @@ function renderAdminPage() {
           '<td>' + response.submittedAt + '</td>' +
           '<td>' + response.week + '</td>' +
           '<td>' + response.group + '</td>' +
+          '<td>' + html(response.studentId) + '</td>' +
           '<td>' + response.topic + '</td>' +
           '<td><strong>' + response.rating + '</strong></td>' +
           '<td><code>' + response.ipHash + '</code></td>';
@@ -694,6 +730,63 @@ function baseStyles() {
     input:focus, select:focus {
       outline: 3px solid var(--soft);
       border-color: var(--primary);
+    }
+    .rating-field {
+      border: 0;
+      padding: 0;
+      margin: 0.45rem 0 0;
+    }
+    .rating-field legend {
+      font-weight: 700;
+      margin-bottom: 0.55rem;
+    }
+    .rating-scale {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+    .rating-option {
+      display: grid;
+      grid-template-rows: auto auto;
+      align-items: center;
+      justify-items: center;
+      min-height: 92px;
+      margin: 0;
+      padding: 0.55rem 0.35rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      text-align: center;
+      gap: 0.25rem;
+    }
+    .rating-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .rating-option span {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: #eef2f5;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .rating-option small {
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.2;
+    }
+    .rating-option:has(input:checked) {
+      border-color: var(--primary);
+      background: var(--soft);
+    }
+    .rating-option:has(input:checked) span {
+      background: var(--primary);
+      color: #fff;
     }
     button, .secondary-button {
       border: 0;
@@ -831,6 +924,16 @@ function baseStyles() {
       .secondary-button {
         width: 100%;
       }
+      .rating-scale {
+        grid-template-columns: 1fr;
+      }
+      .rating-option {
+        grid-template-columns: 42px 1fr;
+        grid-template-rows: 1fr;
+        justify-items: start;
+        min-height: 56px;
+        text-align: left;
+      }
       h1 { font-size: 1.65rem; }
     }
   `;
@@ -846,7 +949,7 @@ function csvEscape(value) {
 
 function renderCsv() {
   const rows = readResponses().responses || [];
-  const header = ["submittedAt", "week", "date", "group", "topic", "rating", "ipHash"];
+  const header = ["submittedAt", "week", "date", "group", "studentId", "topic", "rating", "ipHash"];
   const body = rows.map((row) => header.map((key) => csvEscape(row[key])).join(","));
   return [header.join(","), ...body].join("\n");
 }
@@ -882,6 +985,12 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    const studentId = String(body.studentId || "").trim();
+    if (!/^[0-9]{4,20}$/.test(studentId)) {
+      sendJson(res, 400, { error: "Please enter a valid student ID." });
+      return;
+    }
+
     const state = readState();
     const match = findPresentationByCode(body.code, state);
     if (!match) {
@@ -908,6 +1017,7 @@ async function handleApi(req, res, url) {
       chapter: match.presentation.chapter,
       topic: match.presentation.topic,
       group: match.presentation.group,
+      studentId,
       rating,
       ipHash,
       submittedAt: getKstDateParts().isoLike

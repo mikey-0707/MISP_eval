@@ -21,7 +21,7 @@ Admin URL is printed at startup and stored through `data/admin-key.txt`.
 1. Open the admin URL.
 2. Press `Start` for the group currently presenting.
 3. Read the generated six-digit code aloud.
-4. Students enter the code and choose a 1-5 rating for:
+4. Students enter their student ID, enter the code, and choose a 1-5 rating for:
 
 ```text
 I am willing to purchase this product.
