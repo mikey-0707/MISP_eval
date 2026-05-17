@@ -1,0 +1,81 @@
+[
+  {
+    "week": 11,
+    "date": "2026-05-18",
+    "chapter": "Social Computing",
+    "note": "",
+    "presentations": [
+      {
+        "id": "week-11-group-5",
+        "topic": "AI advertisement planning #5",
+        "group": "5"
+      },
+      {
+        "id": "week-11-group-6",
+        "topic": "AI advertisement planning #6",
+        "group": "6"
+      }
+    ]
+  },
+  {
+    "week": 12,
+    "date": "2026-05-25",
+    "chapter": "Information Systems Within the Organization",
+    "note": "Substitute public holiday",
+    "presentations": []
+  },
+  {
+    "week": 13,
+    "date": "2026-06-01",
+    "chapter": "Customer Relationship Management",
+    "note": "",
+    "presentations": [
+      {
+        "id": "week-13-group-7",
+        "topic": "AI advertisement planning #7",
+        "group": "7"
+      },
+      {
+        "id": "week-13-group-8",
+        "topic": "AI advertisement planning #8",
+        "group": "8"
+      }
+    ]
+  },
+  {
+    "week": 14,
+    "date": "2026-06-08",
+    "chapter": "Supply Chain Management",
+    "note": "",
+    "presentations": [
+      {
+        "id": "week-14-group-9",
+        "topic": "AI advertisement planning #9",
+        "group": "9"
+      },
+      {
+        "id": "week-14-group-10",
+        "topic": "AI advertisement planning #10",
+        "group": "10"
+      }
+    ]
+  },
+  {
+    "week": 15,
+    "date": "2026-06-15",
+    "chapter": "Business Analytics",
+    "note": "",
+    "presentations": [
+      {
+        "id": "week-15-group-11",
+        "topic": "AI advertisement planning #11",
+        "group": "11"
+      },
+      {
+        "id": "week-15-group-12",
+        "topic": "AI advertisement planning #12",
+        "group": "12"
+      }
+    ]
+  }
+]

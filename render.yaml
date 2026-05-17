@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: presentation-evaluation-service
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: APP_DATA_DIR
+        value: /var/data
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_SSL
+        value: "true"
+    disk:
+      name: presentation-evaluation-data
+      mountPath: /var/data
+      sizeGB: 1
